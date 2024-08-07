@@ -25,3 +25,14 @@
     line-height: 17px;
   }
 }
+
+/* Стиль для неактивной кнопки на форме */
+.form__submit_inactive {
+  color: rgba(0, 0, 0, 0.2);
+  background-color: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.form__submit_inactive:hover {
+  color: rgba(255, 255, 255, 1);
+}

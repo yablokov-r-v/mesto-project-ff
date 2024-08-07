@@ -1,7 +1,9 @@
 import './pages/index.css';
 import {initialCards} from './scripts/cards.js';
-import {deleteCard, likeIsActive, createCard} from './components/card.js';
+import {deleteCard, likeCard, createCard} from './components/card.js';
 import {closePopup, openPopup} from './components/modal.js';
+import {enableValidation, clearValidation} from './components/validation.js';
+import {getUserData, getCards} from './components/api.js';
 
 // @todo: Темплейт карточки
 const elementTemplate = document.querySelector('#card-template').content;
@@ -24,17 +26,40 @@ const popupCloseButtons = document.querySelectorAll('.popup__close');
 const popups = document.querySelectorAll('.popup');
 const profileTitle = document.querySelector('.profile__title');
 const profileDescription = document.querySelector('.profile__description');
+const popupForm = document.querySelector('.popup__form');
+const popupInput = popupForm.querySelector('.popup__input');
+const profileImage = document.querySelector('.profile__image');
+const popupTypePatch= document.querySelector('.popup_type_patch');
+const formElementPatchAvatar = popupTypePatch.querySelector('.popup__form');
+const avatarInput = formElementPatchAvatar.querySelector('.popup__input_type_avatar');
 
-// @todo: Вывести карточки на страницу
-initialCards.forEach((item) => {
-    const newCard = createCard(item, deleteCard, openCard, likeIsActive, elementTemplate); 
+// Используем Promise.all для выполнения двух запросов
+const promises = [getUserData(), getCards()];
+Promise.all(promises)
+.then((results) => {
+  console.log(results);
+
+  // Вывод информации о пользователе
+  profileTitle.textContent = results[0].name;
+  profileDescription.textContent = results[0].about;
+  profileImage.style.backgroundImage = `url(${results[0].avatar})`;
+  const userId = results[0]._id;
+
+  // Вывод карточек на страницу
+  results[1].forEach((item) => {
+    const newCard = createCard(item, deleteCard, openCard, likeCard, elementTemplate, userId); 
     elementList.append(newCard);
+  });
+})
+.catch((err) => {
+  console.log('Ошибка: ', err); 
 });
 
 // Открытие окна - Редактирование информации в профиле
 profileEditButton.addEventListener('click', function() {
     inputName.value = profileTitle.textContent;
     inputDescription.value = profileDescription.textContent;
+    clearValidation(popupTypeEdit);
     openPopup(popupTypeEdit);
 });
 
@@ -61,13 +86,45 @@ formElement.addEventListener('submit', handleProfileFormSubmit);
 formElementNewCard.addEventListener('submit', handleFormNewCardSubmit);
 
 // Редактирование информации в профиле
- function handleProfileFormSubmit(evt) {
-    evt.preventDefault();
-    const nameValue = nameInput.value;
-    const jobValue = jobInput.value;
-    profileTitle.textContent = nameValue;
-    profileDescription.textContent = jobValue;
-    closePopup(popupTypeEdit);
+function handleProfileFormSubmit(evt) {
+  evt.preventDefault();
+  const nameValue = nameInput.value;
+  const jobValue = jobInput.value;
+  const submitButton = evt.target.querySelector('.popup__button');
+  submitButton.textContent = 'Сохранение...';
+
+  const patchUserData = () => {
+    return fetch('https://mesto.nomoreparties.co/v1/wff-cohort-20/users/me', {
+      method: 'PATCH',
+      headers: {
+        authorization: 'df920228-ceba-4505-8d93-fdb1716d6967',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        name: nameValue,
+        about: jobValue
+      })
+    })
+      .then((res) => {
+      if (res.ok) {
+        return res.json();
+      }
+        return Promise.reject(`Что-то пошло не так: ${res.status}`);
+      })
+      .then((result) => {
+        console.log('Информация в профиле успешно отредактирована ', result);
+        profileTitle.textContent = result.name;
+        profileDescription.textContent = result.about;
+      })
+      .catch((err) => {
+        console.log('Ошибка: ', err); 
+      })
+      .finally(() => {
+        submitButton.textContent = 'Сохранить';
+      });
+  }
+  patchUserData();
+  closePopup(popupTypeEdit);
 }
 
 // Добавление новой карточки в начало
@@ -79,27 +136,111 @@ formElementNewCard.addEventListener('submit', handleFormNewCardSubmit);
         name: cardNameValue,
         link: linkImageValue
     };
-    const newCardElement = createCard(newCard, deleteCard, openCard, likeIsActive, elementTemplate); 
-    elementList.prepend(newCardElement);
+    const submitButton = evt.target.querySelector('.popup__button');
+    submitButton.textContent = 'Сохранение...';
+
+    const addNewCard = () => {
+      return fetch('https://mesto.nomoreparties.co/v1/wff-cohort-20/cards', {
+        method: 'POST',
+        headers: {
+          authorization: 'df920228-ceba-4505-8d93-fdb1716d6967',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: cardNameValue,
+          link: linkImageValue
+        })
+      })
+        .then((res) => {
+        if (res.ok) {
+          return res.json();
+        }
+          return Promise.reject(`Что-то пошло не так: ${res.status}`);
+        })
+        .then((result) => {
+          console.log('Новая карточка успешно добавлена ', result);
+          const userId = result.owner._id;
+          const newCardElement = createCard(result, deleteCard, openCard, likeCard, elementTemplate, userId); 
+          elementList.prepend(newCardElement);
+        })
+        .catch((err) => {
+          console.log('Ошибка: ', err); 
+        })
+        .finally(() => {
+          submitButton.textContent = 'Сохранить';
+        });
+    }
+    addNewCard();
     cardNameInput.value = '';
     linkImageInput.value = '';
+    clearValidation(popupTypeNewCard);
     closePopup(popupTypeNewCard);
 }
 
-    // Закрыть модальное окно на крестик
-    popupCloseButtons.forEach((button) => {
-        button.addEventListener('click', () => {
-        const popupOpened = button.closest('.popup_is-opened');
-        closePopup(popupOpened);
-        });
+// Закрыть модальное окно на крестик
+popupCloseButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+    const popupOpened = button.closest('.popup_is-opened');
+    closePopup(popupOpened);
     });
+});
 
-    // Закрыть модальное окно на оверлэй
-    popups.forEach((overlay) => {
-        overlay.addEventListener('click', (evt) => {
-        if (evt.currentTarget === evt.target) {
-            const popupOpened = overlay.closest('.popup_is-opened');
-            closePopup(popupOpened);
-        }
-        });
+// Закрыть модальное окно на оверлэй
+popups.forEach((overlay) => {
+    overlay.addEventListener('click', (evt) => {
+    if (evt.currentTarget === evt.target) {
+        const popupOpened = overlay.closest('.popup_is-opened');
+        closePopup(popupOpened);
+    }
     });
+});
+
+// Открытие окна - Обновление аватара пользователя
+profileImage.addEventListener('click', () => openPopup(popupTypePatch));
+
+// Сохранение данных при обновлении аватара пользователя
+formElementPatchAvatar.addEventListener('submit', handlePatchAvatarFormSubmit);
+
+// Обновление аватара пользователя
+function handlePatchAvatarFormSubmit(evt) {
+  evt.preventDefault();
+  const avatarValue = avatarInput.value;
+  const submitButton = evt.target.querySelector('.popup__button');
+  submitButton.textContent = 'Сохранение...';
+
+  const patchAvatar = () => {
+    return fetch('https://mesto.nomoreparties.co/v1/wff-cohort-20/users/me/avatar', {
+      method: 'PATCH',
+      headers: {
+        authorization: 'df920228-ceba-4505-8d93-fdb1716d6967',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        avatar: avatarValue,
+      })
+    })
+      .then((res) => {
+      if (res.ok) {
+        return res.json();
+      }
+        return Promise.reject(`Что-то пошло не так: ${res.status}`);
+      })
+      .then((result) => {
+        console.log('Аватар пользователя успешно обновлен ', result);
+        profileImage.style.backgroundImage = `url(${result.avatar})`;
+      })
+      .catch((err) => {
+        console.log('Ошибка: ', err); 
+      })
+      .finally(() => {
+        submitButton.textContent = 'Сохранить';
+      });
+  }
+  patchAvatar();
+  avatarInput.value = '';
+  clearValidation(popupTypePatch);
+  closePopup(popupTypePatch);
+}
+
+// Вызовем функцию, отвечающую за валидацию
+enableValidation(); 
