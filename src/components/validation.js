@@ -101,8 +101,7 @@ export const clearValidation = (popup, config) => {
     const popupForm = popup.querySelector(config.formSelector);
     const inputList = Array.from(popupForm.querySelectorAll(config.inputSelector));
     const buttonElement = popupForm.querySelector(config.submitButtonSelector);
-    buttonElement.disabled = true;
-    buttonElement.classList.add(config.inactiveButtonClass);
+    disableSubmitButton(buttonElement, config);
     inputList.forEach((popupInput) => {
       hideInputError(popupForm, popupInput, config);
     });
